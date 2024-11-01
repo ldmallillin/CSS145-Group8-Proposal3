@@ -9,7 +9,7 @@ import plotly.express as px
 # Page configuration
 st.set_page_config(
     page_title="Dashboard Template", # Replace this with your Project's Title
-    page_icon="assets/icon.png", # You may replace this with a custom icon or emoji related to your project
+    page_icon="☕", # You may replace this with a custom icon or emoji related to your project
     layout="wide",
     initial_sidebar_state="expanded")
 
@@ -57,13 +57,13 @@ with st.sidebar:
 
     # Project Members
     st.subheader("Members")
-    st.markdown("1. Elon Musk\n2. Jeff Bezos\n3. Sam Altman\n4. Mark Zuckerberg")
+    st.markdown("1. BUNAG, Annika\n2. CHUA, Denrick Ronn\n3. MALLILLIN, Loragene\n4. SIBAYAN, Gian Eugene\n5. UMALI, Ralph Dwayne")
 
 #######################
 # Data
 
 # Load data
-dataset = pd.read_csv("data/IRIS.csv")
+dataset = pd.read_csv("data/coffee_analysis.csv")
 
 #######################
 
@@ -79,7 +79,7 @@ if st.session_state.page_selection == "about":
 elif st.session_state.page_selection == "dataset":
     st.header("📊 Dataset")
 
-    st.write("IRIS Flower Dataset")
+    st.write("Coffee Reviews Dataset by `@schmoyote`")
     st.write("")
 
     # Your content for your DATASET page goes here
