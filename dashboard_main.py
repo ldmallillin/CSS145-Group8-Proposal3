@@ -26,6 +26,10 @@ from collections import Counter
 from sklearn.feature_extraction.text import CountVectorizer
 import re
 import nltk
+import string
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
 
 # Download NLTK resources
 nltk.download('punkt')
@@ -121,14 +125,14 @@ elif st.session_state.page_selection == "data_cleaning":
     st.header("🧼 Data Cleaning and Data Pre-processing")
 
     # Display the initial dataset
-    st.subheader("Initial Dataset")
+    st.subheader("Initial Dataset", divider=True)
     st.write(df_initial.head())
 
     # Making a copy before pre-processing
     df = df_initial.copy()
 
-    # Removing nulls
-    st.subheader("Check for Missing Values")
+    ##### Removing nulls
+    st.subheader("Removing nulls, duplicates, etc.", divider=True)
     missing_values = round((df.isnull().sum()/df.shape[0])*100, 2)
     st.write(missing_values)
 
@@ -142,8 +146,8 @@ elif st.session_state.page_selection == "data_cleaning":
     num_duplicate_rows = len(duplicate_rows)
     st.write(f"Number of duplicate rows: {num_duplicate_rows}")
 
-    # Removing Outliers
-    st.subheader("Removing Price Outliers")
+    ##### Removing Outliers
+    st.subheader("Removing Outliers", divider=True)
     plt.figure(figsize=(10, 4))
     plt.boxplot(df['100g_USD'], vert=False)
     plt.ylabel('Price Column (100g_USD)')
@@ -192,6 +196,91 @@ elif st.session_state.page_selection == "data_cleaning":
     # Display rating statistics
     st.markdown("**Rating Statistics after Outlier Removal:**")
     st.write(df['rating'].describe())
+
+    ##### Text pre-processing
+    st.subheader("Coffee review text pre-processing", divider=True)
+
+    lemmatizer = WordNetLemmatizer()
+    stop_words = set(stopwords.words('english'))
+
+    st.markdown("`df[['desc_1', 'desc_2', 'desc_3']].head()`")
+    st.write(df[['desc_1', 'desc_2', 'desc_3']].head())
+
+    # Function to preprocess a single description column
+    def preprocess_text(text):
+        # 1. Lowercase
+        text = text.lower()
+
+        # 2. Remove punctuation
+        text = text.translate(str.maketrans('', '', string.punctuation))
+
+        # 3. Tokenize
+        tokens = word_tokenize(text)
+
+        # 4. Remove stopwords
+        tokens = [word for word in tokens if word not in stop_words]
+
+        # 5. Lemmatize
+        tokens = [lemmatizer.lemmatize(word) for word in tokens]
+
+        return ' '.join(tokens)
+
+    # Apply the preprocessing
+    df['desc_1_processed'] = df['desc_1'].apply(preprocess_text)
+    df['desc_2_processed'] = df['desc_2'].apply(preprocess_text)
+    df['desc_3_processed'] = df['desc_3'].apply(preprocess_text)
+
+    # Display the processed DataFrame
+    st.write(df[['desc_1_processed', 'desc_1', 'desc_2_processed', 'desc_2', 'desc_3_processed', 'desc_3']].head())
+
+    ##### Encoding object columns
+    st.subheader("Encoding object columns", divider=True)
+
+    # Display DataFrame info
+    info_buffer = st.empty()  
+
+    # Create a summary DataFrame for display
+    info_data = {
+        "Column": df.columns,
+        "Non-Null Count": df.notnull().sum(),
+        "Dtype": df.dtypes
+    }
+
+    info_df = pd.DataFrame(info_data)
+
+    st.dataframe(info_df)
+
+    # Initialize the LabelEncoder
+    encoder = LabelEncoder()
+
+    # Encode object columns
+    df['name_encoded'] = encoder.fit_transform(df['name'])
+    df['roaster_encoded'] = encoder.fit_transform(df['roaster'])
+    df['roast_encoded'] = encoder.fit_transform(df['roast'])
+    df['loc_country_encoded'] = encoder.fit_transform(df['loc_country'])
+    df['origin_1_encoded'] = encoder.fit_transform(df['origin_1'])
+    df['origin_2_encoded'] = encoder.fit_transform(df['origin_2'])
+
+    # Display encoded columns
+    st.subheader("Encoded Columns Preview")
+    st.write(df[['name', 'name_encoded', 'roast', 'roast_encoded', 'roaster', 'roaster_encoded']].head())
+    st.write(df[['loc_country', 'loc_country_encoded', 'origin_1', 'origin_1_encoded', 'origin_2', 'origin_2_encoded']].head())
+
+    # Create and display summary mapping DataFrames
+    def display_summary_mapping(column_name, encoded_column_name):
+        unique_summary = df[column_name].unique()
+        unique_summary_encoded = df[encoded_column_name].unique()
+        summary_mapping_df = pd.DataFrame({column_name: unique_summary, f'{column_name}_encoded': unique_summary_encoded})
+        st.write(f"{column_name} Summary Mapping")
+        st.dataframe(summary_mapping_df)
+
+    # Display mappings for each encoded column
+    display_summary_mapping('name', 'name_encoded')
+    display_summary_mapping('roast', 'roast_encoded')
+    display_summary_mapping('roaster', 'roaster_encoded')
+    display_summary_mapping('loc_country', 'loc_country_encoded')
+    display_summary_mapping('origin_1', 'origin_1_encoded')
+    display_summary_mapping('origin_2', 'origin_2_encoded')
 
 ###################################################################
 # EDA Page ########################################################
