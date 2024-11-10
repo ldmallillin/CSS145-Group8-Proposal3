@@ -206,24 +206,26 @@ elif st.session_state.page_selection == "data_cleaning":
     st.markdown("`df[['desc_1', 'desc_2', 'desc_3']].head()`")
     st.write(df[['desc_1', 'desc_2', 'desc_3']].head())
 
-    # Function to preprocess a single description column
+    # Combining all the preprocessing techniques in one function
     def preprocess_text(text):
         # 1. Lowercase
         text = text.lower()
 
-        # 2. Remove punctuation
+        # 2. Remove punctuations
         text = text.translate(str.maketrans('', '', string.punctuation))
 
         # 3. Tokenize
         tokens = word_tokenize(text)
 
-        # 4. Remove stopwords
+        # 4. Stopword Removal
+        stop_words = set(stopwords.words('english'))
         tokens = [word for word in tokens if word not in stop_words]
 
         # 5. Lemmatize
-        tokens = [lemmatizer.lemmatize(word) for word in tokens]
+        lemmatizer = WordNetLemmatizer()
+        tokens = [lemmatizer.lemmatize(token) for token in tokens]
 
-        return ' '.join(tokens)
+        return tokens
 
     # Apply the preprocessing
     df['desc_1_processed'] = df['desc_1'].apply(preprocess_text)
