@@ -72,11 +72,11 @@ with st.sidebar:
     if st.button("Dataset", use_container_width=True, on_click=set_page_selection, args=('dataset',)):
         st.session_state.page_selection = 'dataset'
 
-    if st.button("EDA", use_container_width=True, on_click=set_page_selection, args=('eda',)):
-        st.session_state.page_selection = "eda"
-
     if st.button("Data Cleaning / Pre-processing", use_container_width=True, on_click=set_page_selection, args=('data_cleaning',)):
         st.session_state.page_selection = "data_cleaning"
+
+    if st.button("EDA", use_container_width=True, on_click=set_page_selection, args=('eda',)):
+        st.session_state.page_selection = "eda"
 
     if st.button("Machine Learning", use_container_width=True, on_click=set_page_selection, args=('machine_learning',)): 
         st.session_state.page_selection = "machine_learning"
@@ -263,6 +263,9 @@ elif st.session_state.page_selection == "data_cleaning":
     df['origin_1_encoded'] = encoder.fit_transform(df['origin_1'])
     df['origin_2_encoded'] = encoder.fit_transform(df['origin_2'])
 
+    # Store the cleaned DataFrame in session state
+    st.session_state.df = df
+
     # Display encoded columns
     st.subheader("Encoded Columns Preview")
     st.write(df[['name', 'name_encoded', 'roast', 'roast_encoded', 'roaster', 'roaster_encoded']].head())
@@ -289,20 +292,85 @@ elif st.session_state.page_selection == "data_cleaning":
 elif st.session_state.page_selection == "eda":
     st.header("📈 Exploratory Data Analysis (EDA)")
 
+    # Check if the cleaned DataFrame exists in session state
+    if 'df' in st.session_state:
+        df = st.session_state.df
 
-    col = st.columns((1.5, 4.5, 2), gap='medium')
+        col = st.columns((2, 3, 3), gap='medium')
 
-    # Your content for the EDA page goes here
+        def create_pie_chart(df, names_col, values_col, width, height, key, title):
+            # Generate a pie chart
+            fig = px.pie(
+                df,
+                names=names_col,
+                values=values_col,
+                title=title
+            )
+            # Adjust the layout for the pie chart
+            fig.update_layout(
+                width=width,  
+                height=height,  
+                showlegend=True
+            )
+            # Display the pie chart in Streamlit
+            st.plotly_chart(fig, use_container_width=True, key=f"pie_chart_{key}")
 
-    with col[0]:
-        st.markdown('#### Graphs Column 1')
+        with col[0]:
+            with st.expander('Legend', expanded=True):
+                st.write('''
+                    - Data: [Coffee Reviews Dataset](https://www.kaggle.com/datasets/schmoyote/coffee-reviews-dataset).
+                    - :orange[**Pie Chart**]: TBA.
+                    ''')
 
+            ##### Roast types chart #####
+            roast_counts = df['roast'].value_counts().reset_index()
+            roast_counts.columns = ['Roast', 'Count']
+            create_pie_chart(roast_counts, 'Roast', 'Count', width=400, height=400, key='coffee_roast', title='Distribution of Roast Types')     
 
-    with col[1]:
-        st.markdown('#### Graphs Column 2')
-        
-    with col[2]:
-        st.markdown('#### Graphs Column 3')
+        with col[1]:
+            ##### Roasters pie chart #####
+            top_n = 20
+
+            roaster_counts = df['roaster'].value_counts()
+            top_roasters = roaster_counts.nlargest(top_n)
+            other_roasters = roaster_counts.iloc[top_n:].sum()
+
+            roaster_counts_top = pd.concat([top_roasters, pd.Series({'Other': other_roasters})]).reset_index()
+            roaster_counts_top.columns = ['Roaster', 'Count']
+
+            create_pie_chart(roaster_counts_top, 'Roaster', 'Count', width=400, height=400, key='top_roasters', title='Distribution of Top 20 Coffee Roasters')
+
+            ##### Bean Origins 1 Pie Chart #####
+            origin_counts = df['origin_1'].value_counts()
+            top_origins = origin_counts.nlargest(top_n)
+            other_origins = origin_counts.iloc[top_n:].sum()
+
+            origin_counts_top = pd.concat([top_origins, pd.Series({'Other': other_origins})]).reset_index()
+            origin_counts_top.columns = ['Origin', 'Count']
+
+            create_pie_chart(origin_counts_top, 'Origin', 'Count', width=400, height=400, key='bean_origins', title=f'Distribution of Top {top_n} Bean Origins in "origin_1"')
+
+        with col[2]:
+            ##### Roaster Locations Pie Chart #####
+            loc_counts = df['loc_country'].value_counts()
+
+            loc_counts_df = loc_counts.reset_index()
+            loc_counts_df.columns = ['Location', 'Count']
+            create_pie_chart(loc_counts_df, 'Location', 'Count', width=400, height=400, key='roaster_locations', title='Distribution of Roaster Locations')
+
+            ##### Bean Origins 2 Pie Chart #####
+            origin_counts_2 = df['origin_2'].value_counts()
+            top_origins_2 = origin_counts_2.nlargest(top_n)
+            other_origins_2 = origin_counts_2.iloc[top_n:].sum()
+
+            origin_counts_top_2 = pd.concat([top_origins_2, pd.Series({'Other': other_origins_2})]).reset_index()
+            origin_counts_top_2.columns = ['Origin', 'Count']
+
+            create_pie_chart(origin_counts_top_2, 'Origin', 'Count', width=400, height=400, key='bean_origins_2', title=f'Distribution of Top {top_n} Bean Origins in "origin_2"')
+            
+
+    else:
+        st.error("DataFrame not found. Please go to the Data Cleaning page first. (It is required that you scroll to the bottom)")
 
 ###################################################################
 # Machine Learning Page ###########################################
