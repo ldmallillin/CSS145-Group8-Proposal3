@@ -382,7 +382,182 @@ elif st.session_state.page_selection == "machine_learning":
 ###################################################################
 # Prediction Page #################################################
 elif st.session_state.page_selection == "prediction":
-    st.header("👀 Prediction")
+    st.header("☕ Coffee Recommendation System")
+    
+    # Check if the cleaned DataFrame exists in session state
+    if 'df' not in st.session_state:
+        st.error("Please process the data in the Data Cleaning page first")
+        st.stop()
+        
+    df = st.session_state.df
+    
+    # Add tabs for different features
+    tab1, tab2 = st.tabs(["Get Recommendations", "Model Insights"])
+    
+    with tab1:
+        # Create sidebar for filters
+        with st.sidebar:
+            st.subheader("Filter Options")
+            
+            # Price range filter
+            price_range = st.slider(
+                "Price Range (USD/100g)",
+                float(df['100g_USD'].min()),
+                float(df['100g_USD'].max()),
+                (float(df['100g_USD'].min()), float(df['100g_USD'].max()))
+            )
+            
+            # Roast type filter
+            roast_types = ['All'] + list(df['roast'].unique())
+            selected_roast = st.selectbox("Roast Type", roast_types)
+            
+            # Origin filter
+            origins = ['All'] + list(df['origin_1'].unique())
+            selected_origin = st.selectbox("Origin", origins)
+
+        # Main content area
+        col1, col2 = st.columns([1, 2])
+
+        with col1:
+            st.subheader("Select Your Coffee")
+            
+            # Filter dataset based on selections
+            filtered_df = df.copy()
+            if selected_roast != 'All':
+                filtered_df = filtered_df[filtered_df['roast'] == selected_roast]
+            if selected_origin != 'All':
+                filtered_df = filtered_df[filtered_df['origin_1'] == selected_origin]
+            filtered_df = filtered_df[
+                (filtered_df['100g_USD'] >= price_range[0]) &
+                (filtered_df['100g_USD'] <= price_range[1])
+            ]
+            
+            # Coffee selection
+            selected_coffee = st.selectbox(
+                "Choose a coffee to get recommendations",
+                options=filtered_df['name'].unique()
+            )
+
+            if selected_coffee:
+                coffee_info = filtered_df[filtered_df['name'] == selected_coffee].iloc[0]
+                st.write("**Selected Coffee Details:**")
+                st.write(f"🫘 Roast: {coffee_info['roast']}")
+                st.write(f"📍 Origin: {coffee_info['origin_1']}")
+                st.write(f"💰 Price: ${coffee_info['100g_USD']:.2f}/100g")
+                st.write(f"⭐ Rating: {coffee_info['rating']}")
+
+        with col2:
+            if selected_coffee:
+                st.subheader("Recommended Coffees")
+                
+                # Create recommendation dataframe
+                df_reco = filtered_df.copy()
+                columns_of_interest = ['name', 'roast', 'origin_1', 'origin_2', '100g_USD', 
+                                     'desc_1_processed', 'desc_2_processed', 'desc_3_processed']
+                df_reco = df_reco[columns_of_interest]
+
+                # Combine descriptions
+                df_reco['combined_desc'] = df_reco.apply(
+                    lambda row: ' '.join(str(x) for x in [
+                        row['desc_1_processed'],
+                        row['desc_2_processed'],
+                        row['desc_3_processed']
+                    ]), 
+                    axis=1
+                )
+
+                # Create TF-IDF matrix
+                tfidf = TfidfVectorizer(stop_words='english')
+                tfidf_matrix = tfidf.fit_transform(df_reco['combined_desc'])
+                
+                # Calculate cosine similarity
+                cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+
+                # Get recommendations
+                idx = df_reco[df_reco['name'] == selected_coffee].index[0]
+                sim_scores = list(enumerate(cosine_sim[idx]))
+                sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+                sim_scores = sim_scores[1:6]  # Get top 5 similar coffees
+                
+                # Create recommendations with details
+                for i, (idx, score) in enumerate(sim_scores, 1):
+                    coffee = df_reco.iloc[idx]
+                    with st.container():
+                        st.markdown(
+                            f"""
+                            <div style='padding: 10px; border-radius: 5px; background-color: rgba(255, 255, 255, 0.05); margin-bottom: 10px;'>
+                                <h3>{i}. {coffee['name']}</h3>
+                                <p><strong>Similarity Score:</strong> {score:.2%}</p>
+                                <p>🫘 <strong>Roast:</strong> {coffee['roast']}</p>
+                                <p>📍 <strong>Origin:</strong> {coffee['origin_1']}</p>
+                                <p>💰 <strong>Price:</strong> ${coffee['100g_USD']:.2f}/100g</p>
+                            </div>
+                            """, 
+                            unsafe_allow_html=True
+                        )
+
+    with tab2:
+        st.subheader("Feature Importance Analysis")
+        
+        # Calculate and display feature importance
+        def calculate_permutation_importance(df, baseline_sim_matrix, feature_columns):
+            importance_scores = {}
+            for feature in feature_columns:
+                df_permuted = df.copy()
+                df_permuted[feature] = np.random.permutation(df_permuted[feature].values)
+                
+                if feature in ['desc_1_processed', 'desc_2_processed', 'desc_3_processed']:
+                    df_permuted['combined_desc'] = df_permuted.apply(
+                        lambda row: ' '.join(str(x) for x in [
+                            row['desc_1_processed'],
+                            row['desc_2_processed'],
+                            row['desc_3_processed']
+                        ]), 
+                        axis=1
+                    )
+                    tfidf_matrix_permuted = tfidf.fit_transform(df_permuted['combined_desc'])
+                    permuted_sim_matrix = cosine_similarity(tfidf_matrix_permuted, tfidf_matrix_permuted)
+                else:
+                    permuted_sim_matrix = cosine_similarity(tfidf_matrix, tfidf_matrix)
+
+                sim_diff = np.abs(baseline_sim_matrix - permuted_sim_matrix).mean()
+                importance_scores[feature] = sim_diff
+            
+            return sorted(importance_scores.items(), key=lambda x: x[1], reverse=True)
+
+        feature_columns = columns_of_interest
+        importance_scores = calculate_permutation_importance(df_reco, cosine_sim, feature_columns)
+        
+        # Create and display bar chart
+        importance_df = pd.DataFrame(importance_scores, columns=['Feature', 'Importance'])
+        fig = px.bar(
+            importance_df, 
+            x='Feature', 
+            y='Importance',
+            title='Feature Importance in Coffee Recommendations',
+            labels={'Importance': 'Importance Score', 'Feature': 'Feature Name'}
+        )
+        fig.update_layout(
+            xaxis_title="Features",
+            yaxis_title="Importance Score",
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Add explanation
+        st.markdown("""
+        ### Understanding the Model
+        
+        This recommendation system uses several features to find similar coffees:
+        
+        1. **Description Analysis**: Processes the coffee descriptions using NLP techniques
+        2. **Roast Type**: Considers the roasting style of the coffee
+        3. **Origin**: Takes into account where the coffee beans come from
+        4. **Price**: Considers the price point of the coffee
+        
+        The bar chart above shows how much each feature contributes to the recommendations.
+        Higher bars indicate more important features in determining coffee similarity.
+        """)
 
     # Your content for the PREDICTION page goes here
 
