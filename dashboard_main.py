@@ -558,6 +558,73 @@ elif st.session_state.page_selection == "prediction":
         The bar chart above shows how much each feature contributes to the recommendations.
         Higher bars indicate more important features in determining coffee similarity.
         """)
+st.header("☕ Coffee Variety Clustering Analysis")
+
+if 'df_cleaned' not in st.session_state:
+    st.error("Please process the data in the Data Cleaning page first")
+    st.stop()
+
+df_clustering = st.session_state.df_cleaned
+
+tab1, tab2 = st.tabs(["Clustering Analysis", "Model Insights"])
+
+with tab1:
+    with st.sidebar:
+        st.subheader("Cluster Configuration")
+        
+        cluster_range = st.slider(
+            "Number of Clusters",
+            min_value=2,
+            max_value=10,
+            value=(2, 10),
+            step=1
+        )
+
+    features = df_clustering[['100g_USD_processed', 'rating_processed']]
+    scaler = StandardScaler()
+    scaled_features = scaler.fit_transform(features)
+    
+    inertia = []
+    K = range(cluster_range[0], cluster_range[1] + 1)
+    for k in K:
+        kmeans = KMeans(n_clusters=k, random_state=42)
+        kmeans.fit(scaled_features)
+        inertia.append(kmeans.inertia_)
+    
+    st.write("### Elbow Method Plot")
+    fig, ax = plt.subplots()
+    ax.plot(K, inertia, 'bo-', color='red')
+    ax.set_title('Elbow Method For Optimal Number of Clusters')
+    ax.set_xlabel('Number of clusters')
+    ax.set_ylabel('Inertia')
+    st.pyplot(fig)
+
+    optimal_clusters = st.number_input("Select Optimal Clusters", min_value=2, max_value=10, value=3, step=1)
+    kmeans = KMeans(n_clusters=optimal_clusters, random_state=42)
+    labels = kmeans.fit_predict(scaled_features)
+
+    df_clustering['Cluster'] = labels
+    
+    st.write("### Cluster Visualization")
+    fig, ax = plt.subplots()
+    scatter = ax.scatter(scaled_features[:, 0], scaled_features[:, 1], c=labels, cmap='viridis', alpha=0.6)
+    ax.set_title(f'Coffee Variety Clustering with {optimal_clusters} Clusters')
+    ax.set_xlabel('Price per 100g (Scaled)')
+    ax.set_ylabel('Rating (Scaled)')
+    plt.colorbar(scatter, ax=ax)
+    st.pyplot(fig)
+
+with tab2:
+    st.subheader("Clustering Quality and Insights")
+
+    sil_score = silhouette_score(scaled_features, labels)
+    st.write(f"**Silhouette Score for {optimal_clusters} clusters:** {sil_score:.2f}")
+
+    st.markdown("""
+        ### Insights on Clustering Quality
+        A higher silhouette score indicates better-defined clusters. Adjust the number of clusters 
+        and observe changes in the score to find the best fit for segmenting coffee varieties.
+    """)
 
     # Your content for the PREDICTION page goes here
 
