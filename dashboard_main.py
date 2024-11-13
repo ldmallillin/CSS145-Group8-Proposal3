@@ -604,7 +604,8 @@ ax1.grid(True)
 st.pyplot(fig1)
 
 # Set optimal number of clusters (you can also make this dynamic using a slider)
-optimal_clusters = 3
+optimal_clusters = st.slider("Select the number of clusters", min_value=2, max_value=10, value=3)
+
 kmeans = KMeans(n_clusters=optimal_clusters, random_state=42)
 labels = kmeans.fit_predict(scaled_features)
 
