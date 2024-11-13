@@ -562,12 +562,13 @@ elif st.session_state.page_selection == "prediction":
         The bar chart above shows how much each feature contributes to the recommendations.
         Higher bars indicate more important features in determining coffee similarity.
         """)
-        
+
 # Check if the cleaned DataFrame exists in session state
 if 'df' not in st.session_state:
     st.error("Please process the data in the Data Cleaning page first.")
     st.stop()
 
+# Load the DataFrame from session state
 df = st.session_state.df
 
 # Clustering Analysis Section
@@ -606,6 +607,7 @@ st.pyplot(fig1)
 # Set optimal number of clusters (you can also make this dynamic using a slider)
 optimal_clusters = st.slider("Select the number of clusters", min_value=2, max_value=10, value=3)
 
+# Fit KMeans with the selected number of clusters
 kmeans = KMeans(n_clusters=optimal_clusters, random_state=42)
 labels = kmeans.fit_predict(scaled_features)
 
