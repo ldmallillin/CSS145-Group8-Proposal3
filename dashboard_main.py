@@ -562,6 +562,83 @@ elif st.session_state.page_selection == "prediction":
         The bar chart above shows how much each feature contributes to the recommendations.
         Higher bars indicate more important features in determining coffee similarity.
         """)
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import silhouette_score
+
+# Check if the cleaned DataFrame exists in session state
+if 'df' not in st.session_state:
+    st.error("Please process the data in the Data Cleaning page first.")
+    st.stop()
+
+# Load the DataFrame from session state
+df = st.session_state.df
+
+# Clustering Analysis Section
+st.header("☕ Coffee Variety Clustering")
+
+# Prepare data for clustering
+# Check if required columns exist
+required_columns = ['100g_USD_processed', 'rating_processed']
+if not all(col in df.columns for col in required_columns):
+    st.error(f"Missing columns in the DataFrame: {required_columns}")
+    st.stop()
+
+df_clustering = df.drop(columns=['origin_1'], errors='ignore')
+df_clustering = df_clustering[required_columns].dropna()
+
+# Remove outliers based on the 99th percentile of '100g_USD_processed'
+price_quantile = df_clustering['100g_USD_processed'].quantile(0.99)
+df_clustering = df_clustering[df_clustering['100g_USD_processed'] < price_quantile]
+
+# Scale the features
+scaler = StandardScaler()
+scaled_features = scaler.fit_transform(df_clustering)
+
+# Determine optimal number of clusters using the Elbow Method
+inertia = []
+K = range(1, 11)
+for k in K:
+    kmeans = KMeans(n_clusters=k, random_state=42)
+    kmeans.fit(scaled_features)
+    inertia.append(kmeans.inertia_)
+
+# Plot Elbow Method
+st.subheader("Elbow Method for Optimal Number of Clusters")
+fig1, ax1 = plt.subplots(figsize=(8, 6))
+ax1.plot(K, inertia, 'bo-', color='red')
+ax1.set_title('Elbow Method For Optimal Number of Clusters')
+ax1.set_xlabel('Number of clusters')
+ax1.set_ylabel('Inertia')
+ax1.grid(True)
+st.pyplot(fig1)
+
+# Set optimal number of clusters using a slider
+optimal_clusters = st.slider("Select the number of clusters", min_value=2, max_value=10, value=3)
+
+# Fit KMeans with the selected number of clusters
+kmeans = KMeans(n_clusters=optimal_clusters, random_state=42)
+labels = kmeans.fit_predict(scaled_features)
+
+# Add cluster labels to the DataFrame
+df_clustering['Cluster'] = labels
+
+# Plot the clustered data
+st.subheader(f'Coffee Variety Clustering with {optimal_clusters} Clusters')
+fig2, ax2 = plt.subplots(figsize=(8, 6))
+scatter = ax2.scatter(scaled_features[:, 0], scaled_features[:, 1], c=labels, cmap='viridis', alpha=0.6)
+ax2.set_title(f'Coffee Variety Clustering with {optimal_clusters} Clusters', fontsize=16)
+ax2.set_xlabel('Price per 100g (Scaled)', fontsize=12)
+ax2.set_ylabel('Rating (Scaled)', fontsize=12)
+ax2.grid(True)
+st.pyplot(fig2)
+
+# Calculate and display silhouette score
+sil_score = silhouette_score(scaled_features, labels)
+st.write(f'Silhouette Score for {optimal_clusters} clusters: {sil_score:.2f}')
 
     # Your content for the PREDICTION page goes here
 
