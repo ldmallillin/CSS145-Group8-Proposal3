@@ -593,47 +593,7 @@ with tab1:
     ax1.plot(K, inertia, marker='o', color='red')
     ax1.set_title('Elbow Method For Optimal Number of Clusters')
     ax1.set_xlabel('Number of clusters')
-    ax1.set_ylabel('Inertia')
-    ax1.grid(True)
-    st.pyplot(fig1)
-
-    optimal_clusters = 3
-    kmeans = KMeans(n_clusters=optimal_clusters, random_state=42)
-    labels = kmeans.fit_predict(scaled_features)
-
-    df_cleaned['Cluster'] = labels
-
-    st.subheader(f'Coffee Variety Clustering with {optimal_clusters} Clusters')
-    fig2, ax2 = plt.subplots(figsize=(8, 6))
-    scatter = ax2.scatter(scaled_features[:, 0], scaled_features[:, 1], c=labels, cmap='viridis', alpha=0.6)
-    ax2.set_title(f'Coffee Variety Clustering with {optimal_clusters} Clusters', fontsize=16)
-    ax2.set_xlabel('Price per 100g (Scaled)', fontsize=12)
-    ax2.set_ylabel('Rating (Scaled)', fontsize=12)
-    ax2.grid(True)
-    st.pyplot(fig2)
-
-    sil_score = silhouette_score(scaled_features, labels)
-    st.write(f'Silhouette Score for {optimal_clusters} clusters: {sil_score}')
-
-with tab2:
-    st.subheader("Cluster Insights and Feature Analysis")
-
-    st.write("### Cluster Distribution")
-    cluster_counts = df_cleaned['Cluster'].value_counts().sort_index()
-    st.bar_chart(cluster_counts)
-
-    st.markdown("""
-    ### Understanding the Clusters
-    
-    This clustering analysis groups coffee varieties based on two key features:
-    
-    1. **Price per 100g**: The price of the coffee for a given weight.
-    2. **Rating**: The user ratings of the coffee.
-    
-    The **Elbow Method** is used to determine the optimal number of clusters by evaluating inertia across different cluster counts.
-    
-    The **Silhouette Score** measures how well-separated the clusters are. A higher score indicates better clustering quality.
-    """)
+    ax1.set
 
     # Your content for the PREDICTION page goes here
 
