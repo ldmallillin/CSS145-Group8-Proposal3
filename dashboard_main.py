@@ -563,132 +563,124 @@ elif st.session_state.page_selection == "prediction":
         Higher bars indicate more important features in determining coffee similarity.
         """)
 
-st.set_page_config(page_title="Coffee Variety Clustering", layout="wide")
+
+
+if 'page_selection' not in st.session_state:
+    st.error("Please navigate to this page through the main menu.")
+    st.stop()
+
+if st.session_state.page_selection != "clustering":
+    st.error("Please navigate to the Clustering page from the main menu.")
+    st.stop()
 
 if 'df' not in st.session_state:
     st.error("Please process the data in the Data Cleaning page first.")
     st.stop()
 
-df = st.session_state.df.copy()  # Create a copy to avoid modifying original data
+try:
+    df = st.session_state.df.copy()
 
-st.header("☕ Coffee Variety Clustering")
+    st.header("☕ Coffee Variety Clustering")
 
-required_columns = ['100g_USD_processed', 'rating_processed']
+    required_columns = ['100g_USD_processed', 'rating_processed']
+  
+    if not all(col in df.columns for col in required_columns):
+        st.error(f"Required columns for clustering: {', '.join(required_columns)}")
+        st.error("Please ensure your data contains these columns.")
+        st.stop()
+ 
+    df_clustering = df[required_columns].copy()
 
-if not all(col in df.columns for col in required_columns):
-    st.error(f"Required columns for clustering: {', '.join(required_columns)}")
-    st.error("Please ensure your data contains these columns.")
-    st.stop()
+    if df_clustering.isna().any().any():
+        st.warning(f"Found {df_clustering.isna().sum().sum()} missing values. These rows will be removed.")
+        df_clustering = df_clustering.dropna()
 
-df_clustering = df[required_columns].copy()
-
-if df_clustering.isna().any().any():
-    st.warning(f"Found {df_clustering.isna().sum().sum()} missing values. These rows will be removed.")
-    df_clustering = df_clustering.dropna()
-
-col1, col2 = st.columns(2)
-with col1:
-    outlier_percentile = st.slider(
-        "Select percentile for outlier removal",
-        min_value=90,
-        max_value=100,
-        value=99,
-        help="Higher values keep more data points"
+    col1, col2 = st.columns(2)
+    with col1:
+        outlier_percentile = st.slider(
+            "Select percentile for outlier removal",
+            min_value=90,
+            max_value=100,
+            value=99,
+            help="Higher values keep more data points"
+        )
+    
+    price_quantile = df_clustering['100g_USD_processed'].quantile(outlier_percentile/100)
+    df_clustering = df_clustering[df_clustering['100g_USD_processed'] < price_quantile]
+    
+    with col2:
+        st.info(f"Using {len(df_clustering)} data points after removing outliers")
+ 
+    scaler = StandardScaler()
+    scaled_features = scaler.fit_transform(df_clustering)
+  
+    optimal_clusters = st.slider(
+        "Select the number of clusters",
+        min_value=2,
+        max_value=10,
+        value=3,
+        help="Choose the number of clusters"
     )
 
-price_quantile = df_clustering['100g_USD_processed'].quantile(outlier_percentile/100)
-df_clustering = df_clustering[df_clustering['100g_USD_processed'] < price_quantile]
+    kmeans = KMeans(n_clusters=optimal_clusters, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(scaled_features)
 
-with col2:
-    st.info(f"Using {len(df_clustering)} data points after removing outliers")
+    df_clustering['Cluster'] = labels
 
-scaler = StandardScaler()
-scaled_features = scaler.fit_transform(df_clustering)
+    st.subheader(f'Coffee Variety Clustering with {optimal_clusters} Clusters')
+    
+    fig, ax = plt.subplots(figsize=(12, 8))
+    scatter = ax.scatter(
+        df_clustering['100g_USD_processed'],
+        df_clustering['rating_processed'],
+        c=labels,
+        cmap='viridis',
+        alpha=0.6
+    )
 
-@st.cache_data
-def calculate_inertia(max_clusters=10):
-    inertia = []
-    K = range(1, max_clusters + 1)
-    for k in K:
-        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-        kmeans.fit(scaled_features)
-        inertia.append(kmeans.inertia_)
-    return K, inertia
+    centers = kmeans.cluster_centers_
+    inverse_transformed_centers = scaler.inverse_transform(centers)
+    ax.scatter(
+        inverse_transformed_centers[:, 0],
+        inverse_transformed_centers[:, 1],
+        c='red',
+        marker='x',
+        s=200,
+        linewidths=3,
+        label='Cluster Centers'
+    )
+    
+    ax.set_title(f'Coffee Variety Clustering with {optimal_clusters} Clusters', fontsize=16)
+    ax.set_xlabel('Price per 100g (USD)', fontsize=12)
+    ax.set_ylabel('Rating', fontsize=12)
+    ax.grid(True)
+    ax.legend()
 
-K, inertia = calculate_inertia()
+    plt.colorbar(scatter, label='Cluster')
+    
+    st.pyplot(fig)
+    plt.close()
 
-st.subheader("Elbow Method for Optimal Number of Clusters")
-fig1, ax1 = plt.subplots(figsize=(10, 6))
-ax1.plot(K, inertia, 'bo-', color='red')
-ax1.set_title('Elbow Method For Optimal Number of Clusters')
-ax1.set_xlabel('Number of clusters')
-ax1.set_ylabel('Inertia')
-ax1.grid(True)
-st.pyplot(fig1)
-plt.close()
+    sil_score = silhouette_score(scaled_features, labels)
+    st.metric(
+        label="Silhouette Score",
+        value=f"{sil_score:.3f}",
+        help="Values closer to 1 indicate better-defined clusters"
+    )
 
-optimal_clusters = st.slider(
-    "Select the number of clusters",
-    min_value=2,
-    max_value=10,
-    value=3,
-    help="Choose the number of clusters based on the elbow plot above"
-)
+    st.subheader("Cluster Statistics")
+    cluster_stats = df_clustering.groupby('Cluster').agg({
+        '100g_USD_processed': ['mean', 'min', 'max', 'count'],
+        'rating_processed': ['mean', 'min', 'max']
+    }).round(2)
+    
+    cluster_stats.columns = ['Avg Price', 'Min Price', 'Max Price', 'Count', 'Avg Rating', 'Min Rating', 'Max Rating']
+    st.dataframe(cluster_stats, use_container_width=True)
 
-kmeans = KMeans(n_clusters=optimal_clusters, random_state=42, n_init=10)
-labels = kmeans.fit_predict(scaled_features)
-
-df_clustering['Cluster'] = labels
-
-st.subheader(f'Coffee Variety Clustering with {optimal_clusters} Clusters')
-
-fig2, ax2 = plt.subplots(figsize=(12, 8))
-scatter = ax2.scatter(
-    df_clustering['100g_USD_processed'],
-    df_clustering['rating_processed'],
-    c=labels,
-    cmap='viridis',
-    alpha=0.6
-)
-
-centers = kmeans.cluster_centers_
-inverse_transformed_centers = scaler.inverse_transform(centers)
-ax2.scatter(
-    inverse_transformed_centers[:, 0],
-    inverse_transformed_centers[:, 1],
-    c='red',
-    marker='x',
-    s=200,
-    linewidths=3,
-    label='Cluster Centers'
-)
-
-ax2.set_title(f'Coffee Variety Clustering with {optimal_clusters} Clusters', fontsize=16)
-ax2.set_xlabel('Price per 100g (USD)', fontsize=12)
-ax2.set_ylabel('Rating', fontsize=12)
-ax2.grid(True)
-ax2.legend()
-
-plt.colorbar(scatter, label='Cluster')
-
-st.pyplot(fig2)
-plt.close()
-
-sil_score = silhouette_score(scaled_features, labels)
-st.metric(
-    label="Silhouette Score",
-    value=f"{sil_score:.3f}",
-    help="Values closer to 1 indicate better-defined clusters"
-)
-
-st.subheader("Cluster Statistics")
-cluster_stats = df_clustering.groupby('Cluster').agg({
-    '100g_USD_processed': ['mean', 'min', 'max', 'count'],
-    'rating_processed': ['mean', 'min', 'max']
-}).round(2)
-
-cluster_stats.columns = ['Avg Price', 'Min Price', 'Max Price', 'Count', 'Avg Rating', 'Min Rating', 'Max Rating']
-st.dataframe(cluster_stats, use_container_width=True)
+except Exception as e:
+    st.error(f"An error occurred: {str(e)}")
+    st.write("Current page:", st.session_state.get('page_selection', 'Not set'))
+    st.write("Available session state variables:", list(st.session_state.keys()))
 
 
     # Your content for the PREDICTION page goes here
