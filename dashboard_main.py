@@ -562,83 +562,157 @@ elif st.session_state.page_selection == "prediction":
         The bar chart above shows how much each feature contributes to the recommendations.
         Higher bars indicate more important features in determining coffee similarity.
         """)
-import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score
+def main():
+    # Page configuration
+    st.set_page_config(page_title="Coffee Variety Clustering", layout="wide")
+    
+    # Check if the cleaned DataFrame exists in session state
+    if 'df' not in st.session_state:
+        st.error("Please process the data in the Data Cleaning page first.")
+        st.stop()
 
-# Check if the cleaned DataFrame exists in session state
-if 'df' not in st.session_state:
-    st.error("Please process the data in the Data Cleaning page first.")
-    st.stop()
+    # Load the DataFrame from session state
+    df = st.session_state.df.copy()  # Create a copy to avoid modifying original data
 
-# Load the DataFrame from session state
-df = st.session_state.df
+    # Clustering Analysis Section
+    st.header("☕ Coffee Variety Clustering")
 
-# Clustering Analysis Section
-st.header("☕ Coffee Variety Clustering")
+    # Prepare data for clustering
+    required_columns = ['100g_USD_processed', 'rating_processed']
+    
+    # Check if required columns exist
+    if not all(col in df.columns for col in required_columns):
+        st.error(f"Required columns for clustering: {', '.join(required_columns)}")
+        st.error("Please ensure your data contains these columns.")
+        st.stop()
 
-# Prepare data for clustering
-# Check if required columns exist
-required_columns = ['100g_USD_processed', 'rating_processed']
-if not all(col in df.columns for col in required_columns):
-    st.error(f"Missing columns in the DataFrame: {required_columns}")
-    st.stop()
+    # Create clustering DataFrame
+    df_clustering = df[required_columns].copy()
+    
+    # Handle missing values
+    if df_clustering.isna().any().any():
+        st.warning(f"Found {df_clustering.isna().sum().sum()} missing values. These rows will be removed.")
+        df_clustering = df_clustering.dropna()
 
-df_clustering = df.drop(columns=['origin_1'], errors='ignore')
-df_clustering = df_clustering[required_columns].dropna()
+    # Remove outliers with user input
+    col1, col2 = st.columns(2)
+    with col1:
+        outlier_percentile = st.slider(
+            "Select percentile for outlier removal",
+            min_value=90,
+            max_value=100,
+            value=99,
+            help="Higher values keep more data points"
+        )
+    
+    price_quantile = df_clustering['100g_USD_processed'].quantile(outlier_percentile/100)
+    df_clustering = df_clustering[df_clustering['100g_USD_processed'] < price_quantile]
+    
+    with col2:
+        st.info(f"Using {len(df_clustering)} data points after removing outliers")
 
-# Remove outliers based on the 99th percentile of '100g_USD_processed'
-price_quantile = df_clustering['100g_USD_processed'].quantile(0.99)
-df_clustering = df_clustering[df_clustering['100g_USD_processed'] < price_quantile]
+    # Scale the features
+    scaler = StandardScaler()
+    scaled_features = scaler.fit_transform(df_clustering)
 
-# Scale the features
-scaler = StandardScaler()
-scaled_features = scaler.fit_transform(df_clustering)
+    # Determine optimal number of clusters using the Elbow Method
+    @st.cache_data
+    def calculate_inertia(max_clusters=10):
+        inertia = []
+        K = range(1, max_clusters + 1)
+        for k in K:
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            kmeans.fit(scaled_features)
+            inertia.append(kmeans.inertia_)
+        return K, inertia
 
-# Determine optimal number of clusters using the Elbow Method
-inertia = []
-K = range(1, 11)
-for k in K:
-    kmeans = KMeans(n_clusters=k, random_state=42)
-    kmeans.fit(scaled_features)
-    inertia.append(kmeans.inertia_)
+    # Calculate inertia
+    K, inertia = calculate_inertia()
 
-# Plot Elbow Method
-st.subheader("Elbow Method for Optimal Number of Clusters")
-fig1, ax1 = plt.subplots(figsize=(8, 6))
-ax1.plot(K, inertia, 'bo-', color='red')
-ax1.set_title('Elbow Method For Optimal Number of Clusters')
-ax1.set_xlabel('Number of clusters')
-ax1.set_ylabel('Inertia')
-ax1.grid(True)
-st.pyplot(fig1)
+    # Plot Elbow Method
+    st.subheader("Elbow Method for Optimal Number of Clusters")
+    fig1, ax1 = plt.subplots(figsize=(10, 6))
+    ax1.plot(K, inertia, 'bo-', color='red')
+    ax1.set_title('Elbow Method For Optimal Number of Clusters')
+    ax1.set_xlabel('Number of clusters')
+    ax1.set_ylabel('Inertia')
+    ax1.grid(True)
+    st.pyplot(fig1)
+    plt.close()
 
-# Set optimal number of clusters using a slider
-optimal_clusters = st.slider("Select the number of clusters", min_value=2, max_value=10, value=3)
+    # Set optimal number of clusters using a slider
+    optimal_clusters = st.slider(
+        "Select the number of clusters",
+        min_value=2,
+        max_value=10,
+        value=3,
+        help="Choose the number of clusters based on the elbow plot above"
+    )
 
-# Fit KMeans with the selected number of clusters
-kmeans = KMeans(n_clusters=optimal_clusters, random_state=42)
-labels = kmeans.fit_predict(scaled_features)
+    # Fit KMeans with the selected number of clusters
+    kmeans = KMeans(n_clusters=optimal_clusters, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(scaled_features)
 
-# Add cluster labels to the DataFrame
-df_clustering['Cluster'] = labels
+    # Add cluster labels to the DataFrame
+    df_clustering['Cluster'] = labels
 
-# Plot the clustered data
-st.subheader(f'Coffee Variety Clustering with {optimal_clusters} Clusters')
-fig2, ax2 = plt.subplots(figsize=(8, 6))
-scatter = ax2.scatter(scaled_features[:, 0], scaled_features[:, 1], c=labels, cmap='viridis', alpha=0.6)
-ax2.set_title(f'Coffee Variety Clustering with {optimal_clusters} Clusters', fontsize=16)
-ax2.set_xlabel('Price per 100g (Scaled)', fontsize=12)
-ax2.set_ylabel('Rating (Scaled)', fontsize=12)
-ax2.grid(True)
-st.pyplot(fig2)
+    # Plot the clustered data
+    st.subheader(f'Coffee Variety Clustering with {optimal_clusters} Clusters')
+    
+    fig2, ax2 = plt.subplots(figsize=(12, 8))
+    scatter = ax2.scatter(
+        df_clustering['100g_USD_processed'],
+        df_clustering['rating_processed'],
+        c=labels,
+        cmap='viridis',
+        alpha=0.6
+    )
+    
+    # Add cluster centers
+    centers = kmeans.cluster_centers_
+    inverse_transformed_centers = scaler.inverse_transform(centers)
+    ax2.scatter(
+        inverse_transformed_centers[:, 0],
+        inverse_transformed_centers[:, 1],
+        c='red',
+        marker='x',
+        s=200,
+        linewidths=3,
+        label='Cluster Centers'
+    )
+    
+    ax2.set_title(f'Coffee Variety Clustering with {optimal_clusters} Clusters', fontsize=16)
+    ax2.set_xlabel('Price per 100g (USD)', fontsize=12)
+    ax2.set_ylabel('Rating', fontsize=12)
+    ax2.grid(True)
+    ax2.legend()
+    
+    # Add colorbar
+    plt.colorbar(scatter, label='Cluster')
+    
+    st.pyplot(fig2)
+    plt.close()
 
-# Calculate and display silhouette score
-sil_score = silhouette_score(scaled_features, labels)
-st.write(f'Silhouette Score for {optimal_clusters} clusters: {sil_score:.2f}')
+    # Calculate and display silhouette score
+    sil_score = silhouette_score(scaled_features, labels)
+    st.metric(
+        label="Silhouette Score",
+        value=f"{sil_score:.3f}",
+        help="Values closer to 1 indicate better-defined clusters"
+    )
+
+    # Display cluster statistics
+    st.subheader("Cluster Statistics")
+    cluster_stats = df_clustering.groupby('Cluster').agg({
+        '100g_USD_processed': ['mean', 'min', 'max', 'count'],
+        'rating_processed': ['mean', 'min', 'max']
+    }).round(2)
+    
+    cluster_stats.columns = ['Avg Price', 'Min Price', 'Max Price', 'Count', 'Avg Rating', 'Min Rating', 'Max Rating']
+    st.dataframe(cluster_stats, use_container_width=True)
+
+if __name__ == "__main__":
+    main()
 
     # Your content for the PREDICTION page goes here
 
