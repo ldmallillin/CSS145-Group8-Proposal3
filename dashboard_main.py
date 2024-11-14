@@ -35,6 +35,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 # Download NLTK resources
 nltk.download('vader_lexicon')
