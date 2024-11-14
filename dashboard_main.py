@@ -88,7 +88,10 @@ with st.sidebar:
 
     if st.button("Machine Learning", use_container_width=True, on_click=set_page_selection, args=('machine_learning',)): 
         st.session_state.page_selection = "machine_learning"
-
+        
+    if st.button("Coffee Price Prediction", use_container_width=True, on_click=set_page_selection, args=('coffee_price_prediction',)):
+        st.session_state.page_selection = "coffee_price_prediction"
+    
     if st.button("Description to Rating", use_container_width=True, on_click=set_page_selection, args=('description_to_rating',)):
         st.session_state.page_selection = "description_to_rating"
     
@@ -389,6 +392,78 @@ elif st.session_state.page_selection == "machine_learning":
     st.header("🤖 Machine Learning")
 
     # Your content for the MACHINE LEARNING page goes here
+    # Coffee Price Prediction Page ################################################
+    elif st.session_state.page_selection == "coffee_price_prediction":
+    st.header("☕ Coffee Price Prediction")
+
+    # Create a copy of the original DataFrame with a unique name for regression
+    df_coffeeprice_regression = st.session_state.df.copy()  # Use cleaned DataFrame stored in session state
+
+    # Select relevant columns and rename them if pre-processed (already cleaned)
+    df_coffeeprice_regression = df_coffeeprice_regression[['roast', 'origin_2', 'loc_country', '100g_USD']]
+    df_coffeeprice_regression = df_coffeeprice_regression.rename(columns={
+        'origin_2': 'origin_2_processed',
+        'loc_country': 'loc_processed'
+    })
+
+    # Drop rows with missing values if any
+    df_coffeeprice_regression = df_coffeeprice_regression.dropna()
+
+    # Handling Outliers using IQR for '100g_USD'
+    Q1 = df_coffeeprice_regression['100g_USD'].quantile(0.25)
+    Q3 = df_coffeeprice_regression['100g_USD'].quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    df_coffeeprice_regression = df_coffeeprice_regression[(df_coffeeprice_regression['100g_USD'] >= lower_bound) & 
+                                                          (df_coffeeprice_regression['100g_USD'] <= upper_bound)]
+
+    # Encoding Categorical Variables
+    le_roast = LabelEncoder()
+    le_origin_2 = LabelEncoder()
+    le_location = LabelEncoder()
+
+    df_coffeeprice_regression['roast'] = le_roast.fit_transform(df_coffeeprice_regression['roast'])
+    df_coffeeprice_regression['origin_2_processed'] = le_origin_2.fit_transform(df_coffeeprice_regression['origin_2_processed'])
+    df_coffeeprice_regression['loc_processed'] = le_location.fit_transform(df_coffeeprice_regression['loc_processed'])
+
+    # Define features (X) and target (y)
+    X = df_coffeeprice_regression[['roast', 'origin_2_processed', 'loc_processed']]
+    y = df_coffeeprice_regression['100g_USD']
+
+    # No need for SMOTE since this is a regression problem
+    # Split the data into training (70%) and testing (30%) sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+    # Random Forest Regressor
+    rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf_model.fit(X_train, y_train)
+    rf_pred = rf_model.predict(X_test)
+    rf_mse = mean_squared_error(y_test, rf_pred)
+    st.write(f"Random Forest - Mean Squared Error: {rf_mse:.2f}")
+
+    # Decision Tree Regressor
+    dt_model = DecisionTreeRegressor(random_state=42)
+    dt_model.fit(X_train, y_train)
+    dt_pred = dt_model.predict(X_test)
+    dt_mse = mean_squared_error(y_test, dt_pred)
+    st.write(f"Decision Tree - Mean Squared Error: {dt_mse:.2f}")
+
+    # Visualize Actual vs Predicted Prices for Random Forest
+    st.write("### Actual vs Predicted Prices (Random Forest)")
+    fig, ax = plt.subplots()
+    ax.scatter(y_test, rf_pred, label='Random Forest', alpha=0.7)
+    ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'k--', lw=2)
+    ax.set_xlabel('Actual Price (USD)')
+    ax.set_ylabel('Predicted Price (USD)')
+    ax.legend()
+    st.pyplot(fig)
+
+    # Feature Importance Analysis for Random Forest
+    st.write("### Feature Importance (Random Forest)")
+    rf_importance = rf_model.feature_importances_
+    for i, score in enumerate(rf_importance):
+        st.write(f"Feature: {X.columns[i]}, Score: {score:.4f}")
 
 ###################################################################
 
