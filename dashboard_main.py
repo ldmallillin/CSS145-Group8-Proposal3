@@ -11,10 +11,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from wordcloud import WordCloud
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -27,6 +27,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 import re
 import nltk
 import string
+from nltk.sentiment import SentimentIntensityAnalyzer
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -36,6 +37,7 @@ from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 
 # Download NLTK resources
+nltk.download('vader_lexicon')
 nltk.download('punkt')
 nltk.download('punkt_tab')
 nltk.download('stopwords')
